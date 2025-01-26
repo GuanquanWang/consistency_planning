@@ -144,16 +144,14 @@ def cosine_beta_schedule(timesteps, s=0.008, dtype=torch.float32):
     betas_clipped = np.clip(betas, a_min=0, a_max=0.999)
     return torch.tensor(betas_clipped, dtype=dtype)
 
-def apply_conditioning(x, conditions, action_dim=None, x0=None, use_hst=False):
-    if use_hst:
-        x = torch.where(conditions, x0, x)
+def apply_conditioning(x, conditions, action_dim=None, c_in=1.0):
+
+    if action_dim is not None:
+        for t, val in conditions.items():
+            x[:, t, action_dim:] = (val/c_in).clone()
     else:
-        if action_dim is not None:
-            for t, val in conditions.items():
-                x[:, t, action_dim:] = val.clone()
-        else:
-            for t, val in conditions.items():
-                x[:, t, :] = val.clone()
+        for t, val in conditions.items():
+            x[:, t, :] = (val/c_in).clone()
     return x
 
 

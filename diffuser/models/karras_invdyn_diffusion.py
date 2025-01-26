@@ -129,7 +129,11 @@ class KarrasInvDynDenoiser:
         terms = {}
         dims = obs.ndim
         x_t = obs + noise * append_dims(sigmas, dims)
-        x_t = apply_conditioning(x_t, model_kwargs)
+        if not self.distillation:
+            c_skip, c_out, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings(sigmas)]
+        else:
+            c_skip, c_out, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings_for_boundary_condition(sigmas)]
+        x_t = apply_conditioning(x_t, model_kwargs, c_in=c_in)
         model_output, denoised = self.denoise(model, x_t, sigmas, returns)
         denoised = apply_conditioning(denoised, model_kwargs)
         assert noise.shape == denoised.shape
@@ -199,6 +203,11 @@ class KarrasInvDynDenoiser:
             if teacher_model is None:
                 denoiser = x0
             else:
+                if not self.distillation:
+                    _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings(next_t)]
+                else:
+                    _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings_for_boundary_condition(next_t)]
+                samples = apply_conditioning(samples, model_kwargs, self.action_dim, c_in=c_in)
                 denoiser = teacher_denoise_fn(samples, next_t)
                 denoiser = apply_conditioning(denoiser, model_kwargs, self.action_dim)
 
@@ -234,7 +243,11 @@ class KarrasInvDynDenoiser:
         t2 = t2**self.rho
 
         x_t = x_start + noise * append_dims(t, dims)
-        x_t = apply_conditioning(x_t, model_kwargs, self.action_dim)
+        if not self.distillation:
+            _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings(t)]
+        else:
+            _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings_for_boundary_condition(t)]
+        x_t = apply_conditioning(x_t, model_kwargs, self.action_dim, c_in=c_in)
 
         dropout_state = th.get_rng_state()
         distiller = denoise_fn(x_t, t)
@@ -244,7 +257,11 @@ class KarrasInvDynDenoiser:
             x_t2 = euler_solver(x_t, t, t2, x_start).detach()
         else:
             x_t2 = heun_solver(x_t, t, t2, x_start).detach()
-            x_t2 = apply_conditioning(x_t2, model_kwargs, self.action_dim)
+            if not self.distillation:
+                _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings(t2)]
+            else:
+                _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings_for_boundary_condition(t2)]
+            x_t2 = apply_conditioning(x_t2, model_kwargs, self.action_dim, c_in=c_in)
 
         th.set_rng_state(dropout_state)
         distiller_target = target_denoise_fn(x_t2, t2)
@@ -335,7 +352,11 @@ class KarrasInvDynDenoiser:
             x_hat = x + append_dims(w+1, dims) * g * append_dims(dt, dims)
 
             samples = x_hat + d * append_dims(dt, dims)
-            samples = apply_conditioning(samples, model_kwargs)
+            if not self.distillation:
+                _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings(next_t)]
+            else:
+                _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings_for_boundary_condition(next_t)]
+            samples = apply_conditioning(samples, model_kwargs, c_in=c_in)
             if teacher_model is None:
                 denoiser = x0
             else:
@@ -376,7 +397,11 @@ class KarrasInvDynDenoiser:
         t2 = t2**self.rho
 
         x_t = x_start + noise * append_dims(t, dims)
-        x_t = apply_conditioning(x_t, model_kwargs)
+        if not self.distillation:
+            _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings(t)]
+        else:
+            _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings_for_boundary_condition(t)]
+        x_t = apply_conditioning(x_t, model_kwargs, c_in=c_in)
 
         dropout_state = th.get_rng_state()
         distiller = denoise_fn(x_t, t, omega)
@@ -386,7 +411,11 @@ class KarrasInvDynDenoiser:
             x_t2 = euler_solver(x_t, t, t2, x_start).detach()
         else:
             x_t2 = heun_solver(x_t, t, t2, x_start, omega).detach()
-            x_t2 = apply_conditioning(x_t2, model_kwargs)
+            if not self.distillation:
+                _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings(t2)]
+            else:
+                _, _, c_in = [append_dims(x, x_t.ndim) for x in self.get_scalings_for_boundary_condition(t2)]
+            x_t2 = apply_conditioning(x_t2, model_kwargs, c_in=c_in)
 
         th.set_rng_state(dropout_state)
         distiller_target = target_denoise_fn(x_t2, t2, omega)
